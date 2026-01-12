@@ -4,13 +4,14 @@ A FastAPI-based web server for sending SMS messages via Teltonika routers.
 
 ## Features
 
-- REST API for sending SMS via HTTP GET requests
-- Automatic authentication with token caching
+- REST API for sending SMS via HTTP GET and POST requests
+- API authentication with username/password (configurable in config.yaml)
+- Automatic authentication with token caching for router
 - Automatic modem detection (uses primary modem)
 - Automatic phone number normalization (+49 → 0049, +XX → 00XX)
 - Automatic SMS splitting for messages > 160 characters
 - URL parameter decoding (UTF-8)
-- Health-check endpoint
+- Health-check endpoint (no authentication required)
 
 ## Requirements
 
@@ -61,24 +62,55 @@ Interactive API documentation:
 
 ## API Endpoints
 
+### Authentication
+
+All API endpoints (except `/health`) require authentication using credentials configured in `config.yaml`:
+
+```yaml
+api:
+  username: "apiuser"
+  password: "apipassword"
+```
+
+Credentials must be provided with each request either as:
+- **GET requests:** URL parameters `username` and `password`
+- **POST requests:** JSON body fields `username` and `password`
+
 ### Send SMS
 
-**Endpoint:** `GET /`
+**Endpoint:** `GET /` or `POST /`
 
-**Parameters:**
-- `username` - API username (required)
-- `password` - API password (required)
+**GET Parameters:**
+- `username` - API username (required, must match config.yaml)
+- `password` - API password (required, must match config.yaml)
 - `number` - Recipient phone number (required)
 - `text` - SMS text (required, URL-encoded)
+
+**POST Body (JSON):**
+```json
+{
+  "username": "apiuser",
+  "password": "apipassword",
+  "number": "+491234567890",
+  "text": "Hello World"
+}
+```
 
 **Phone Number Normalization:**
 - All numbers are automatically normalized before sending
 - `+49...` → `0049...` (and other countries: `+XX` → `00XX`)
 - Numbers starting with `+` are converted to `00` prefix
 
-**Example:**
+**GET Example:**
 ```bash
-curl "http://localhost:8000/?username=user&password=pass&number=%2B491234567890&text=Hello%20World"
+curl "http://localhost:8000/?username=apiuser&password=apipassword&number=%2B491234567890&text=Hello%20World"
+```
+
+**POST Example:**
+```bash
+curl -X POST "http://localhost:8000/" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"apiuser","password":"apipassword","number":"+491234567890","text":"Hello World"}'
 ```
 
 **Response:**
@@ -102,6 +134,8 @@ curl "http://localhost:8000/?username=user&password=pass&number=%2B491234567890&
 
 **Endpoint:** `GET /health`
 
+**Note:** This endpoint does not require authentication.
+
 ```bash
 curl http://localhost:8000/health
 ```
@@ -115,6 +149,10 @@ router:
   url: "https://router.local"
   username: "admin"
   password: "YourPassword"
+
+api:
+  username: "apiuser"
+  password: "apipassword"
 
 server:
   port: 8000
@@ -159,6 +197,7 @@ python send_sms.py --list-modems
 
 ## Troubleshooting
 
-- **Authentication failed:** Check router credentials in `config.yaml`
+- **API authentication failed:** Check API credentials in `config.yaml` (api section) and ensure they match the username/password in your request
+- **Router authentication failed:** Check router credentials in `config.yaml` (router section)
 - **SMS sending failed:** Verify phone number format and modem status
 - **Modem not found:** Check available modems with `python send_sms.py --list-modems`

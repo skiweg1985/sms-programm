@@ -9,6 +9,12 @@ router:
 # Standard modem (automatically detected if not specified)
 # modem: "1-1.4"
 
+# API authentication credentials
+# These credentials are required for all requests except /health
+api:
+  username: "apiuser"              # API username (required for GET/POST requests)
+  password: "apipassword"          # API password (required for GET/POST requests)
+
 # Server configuration
 server:
   port: 8080  # Port on which the web server runs (default: 8000)
