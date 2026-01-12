@@ -4,9 +4,10 @@ FastAPI SMS Gateway for Teltonika Router
 Accepts GET requests with URL parameters for sending SMS
 """
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Body
 from fastapi.responses import JSONResponse
-from typing import Optional
+from typing import Optional, Dict, Any
+from pydantic import BaseModel
 import urllib.parse
 import re
 import logging
@@ -59,6 +60,35 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 app.add_middleware(RequestLoggingMiddleware)
 
 
+def validate_api_credentials(username: str, password: str) -> bool:
+    """
+    Validates API credentials against config.yaml
+    
+    Args:
+        username: Username from request
+        password: Password from request
+    
+    Returns:
+        True if credentials are valid, False otherwise
+    """
+    config = load_config()
+    api_config = config.get("api", {})
+    
+    expected_username = api_config.get("username")
+    expected_password = api_config.get("password")
+    
+    if not expected_username or not expected_password:
+        logger.warning("[AUTH] API credentials not configured in config.yaml")
+        return False
+    
+    if username == expected_username and password == expected_password:
+        logger.info(f"[AUTH] Authentication successful for user: {username}")
+        return True
+    else:
+        logger.warning(f"[AUTH] Authentication failed for user: {username}")
+        return False
+
+
 def decode_url_parameter(param: str) -> str:
     """
     Decodes URL parameter (UTF-8) if still encoded.
@@ -91,170 +121,198 @@ def decode_url_parameter(param: str) -> str:
     return param
 
 
+class SMSRequest(BaseModel):
+    """Model for POST request body"""
+    username: str
+    password: str
+    number: str
+    text: str
+
+
+async def process_sms_request(phone_number: str, message: str):
+    """
+    Common function to process SMS sending request
+    
+    Args:
+        phone_number: Phone number to send SMS to
+        message: SMS message text
+    
+    Returns:
+        Response dictionary with SMS sending result
+    """
+    # Decode URL parameters
+    logger.info("Decoding parameters...")
+    phone_number = decode_url_parameter(phone_number)
+    message = decode_url_parameter(message)
+    logger.info(f"Number (decoded): {phone_number} (length: {len(phone_number)})")
+    logger.info(f"Text (decoded): {message[:100]}... (length: {len(message)})")
+    
+    # Normalize phone number (converts +49 to 0049, +XX to 00XX, etc.)
+    phone_number_original = phone_number
+    phone_number = normalize_phone_number(phone_number)
+    if phone_number != phone_number_original:
+        logger.info(f"Phone number normalized: {phone_number_original} → {phone_number}")
+    
+    # Validation
+    logger.info("Validating parameters...")
+    if not phone_number:
+        logger.error("[FASTAPI-SERVER] Validation error: Phone number is empty")
+        raise HTTPException(
+            status_code=400,
+            detail="Phone number (number) is required and must not be empty"
+        )
+    
+    if not message:
+        logger.error("[FASTAPI-SERVER] Validation error: Message is empty")
+        raise HTTPException(
+            status_code=400,
+            detail="Message (text) is required and must not be empty"
+        )
+    
+    logger.info("✓ Parameter validation successful")
+    
+    # Load router configuration
+    logger.info("Loading router configuration...")
+    config = load_config()
+    router_config = config.get("router", {})
+    
+    # Use router credentials from config
+    router_url = router_config.get("url")
+    router_user = router_config.get("username")
+    router_password = router_config.get("password")
+    
+    if not router_url or not router_user or not router_password:
+        logger.error("[FASTAPI-SERVER] Configuration error: Router credentials missing")
+        raise HTTPException(
+            status_code=500,
+            detail="Router configuration missing. Please configure config.yaml."
+        )
+    
+    logger.info(f"Router URL: {router_url}")
+    logger.info(f"Router User: {router_user}")
+    
+    # Initialize SMS class
+    logger.info("Initializing SMS class...")
+    sms = TRB245SMS(router_url, router_user, router_password)
+    
+    # Authenticate
+    logger.info("Authenticating with router...")
+    if not sms.authenticate():
+        logger.error("[ROUTER] Authentication failed")
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication with router failed"
+        )
+    logger.info("✓ Authentication with router successful")
+    
+    # Find primary modem automatically
+    logger.info("Determining available modems...")
+    modems = sms.get_modems()
+    modem_id = "1-1.4"  # Fallback
+    if modems and modems.get("success") and "data" in modems:
+        logger.info(f"Available modems: {len(modems['data'])}")
+        for modem_info in modems["data"]:
+            if modem_info.get("primary"):
+                modem_id = modem_info.get("id", "1-1.4")
+                logger.info(f"✓ Primary modem found: {modem_id}")
+                break
+        if modem_id == "1-1.4" and modems["data"]:
+            modem_id = modems["data"][0].get("id", "1-1.4")
+            logger.info(f"Using first available modem: {modem_id}")
+    else:
+        logger.warning(f"Could not retrieve modem list, using fallback: {modem_id}")
+    
+    # Send SMS (automatic splitting for > 160 characters)
+    logger.info("=" * 80)
+    logger.info(f"[ROUTER] Sending SMS to {phone_number} via modem {modem_id}")
+    logger.info(f"Message (first 200 characters): {message[:200]}")
+    logger.info(f"Message length: {len(message)} characters")
+    
+    # Check if message needs to be split
+    if len(message) > 160:
+        logger.info(f"ℹ Message is longer than 160 characters and will be automatically split")
+    
+    result = sms.send_sms(phone_number, message, modem_id)
+    
+    # Log complete router response
+    logger.info("=" * 80)
+    logger.info("[ROUTER] Response from router:")
+    logger.info(f"  Success: {result.get('success')}")
+    logger.info(f"  Complete response: {result}")
+    
+    if result.get("success"):
+        sms_used = result.get("data", {}).get("sms_used", 0)
+        parts = result.get("data", {}).get("parts", 1)
+        
+        if parts > 1:
+            logger.info(f"✓ SMS sent successfully! ({parts} parts, total {sms_used} SMS)")
+        else:
+            logger.info(f"✓ SMS sent successfully! (SMS used: {sms_used})")
+        logger.info("=" * 80)
+        
+        response_content = {
+            "success": True,
+            "message": "SMS sent successfully",
+            "sms_used": sms_used,
+            "phone_number": phone_number,
+            "message_length": len(message)
+        }
+        
+        # Add information about multi-part SMS
+        if parts > 1:
+            response_content["parts"] = parts
+            response_content["message"] = f"SMS sent successfully ({parts} parts)"
+        
+        return JSONResponse(
+            status_code=200,
+            content=response_content
+        )
+    else:
+        errors = result.get("errors", [])
+        error_msg = "; ".join([e.get("error", "Unknown error") for e in errors])
+        logger.error("=" * 80)
+        logger.error("[ROUTER] SMS sending failed!")
+        logger.error(f"  Error details: {error_msg}")
+        logger.error(f"  Complete error objects: {errors}")
+        logger.error("=" * 80)
+        raise HTTPException(
+            status_code=422,
+            detail=f"SMS sending failed (error from router): {error_msg}"
+        )
+
+
 @app.get("/")
-async def send_sms(
+async def send_sms_get(
     username: str = Query(..., description="API username"),
     password: str = Query(..., description="API password"),
     number: str = Query(..., description="Phone number (may contain %SMSNUMBER)"),
     text: str = Query(..., description="SMS text (may contain %SMSTEXT)")
 ):
     """
-    Sends an SMS via the router
+    Sends an SMS via the router (GET method)
     
     Parameters are automatically URL-decoded by FastAPI (UTF-8).
     
     Example:
-        GET /?username=prtg&password=passw&number=%2B491234567890&text=Hello%20World
-        GET /?username=prtg&password=passw&number=%SMSNUMBER&text=%SMSTEXT
+        GET /?username=apiuser&password=apipass&number=%2B491234567890&text=Hello%20World
+        GET /?username=apiuser&password=apipass&number=%SMSNUMBER&text=%SMSTEXT
     """
     logger.info("=" * 80)
-    logger.info("New SMS request received")
+    logger.info("New SMS request received (GET)")
     logger.info(f"Username: {username}")
     logger.info(f"Number (raw): {number[:50]}... (length: {len(number)})")
     logger.info(f"Text (raw): {text[:100]}... (length: {len(text)})")
     
     try:
-        # Decode URL parameters
-        logger.info("Decoding URL parameters...")
-        phone_number = decode_url_parameter(number)
-        message = decode_url_parameter(text)
-        logger.info(f"Number (decoded): {phone_number} (length: {len(phone_number)})")
-        logger.info(f"Text (decoded): {message[:100]}... (length: {len(message)})")
-        
-        # Normalize phone number (converts +49 to 0049, +XX to 00XX, etc.)
-        phone_number_original = phone_number
-        phone_number = normalize_phone_number(phone_number)
-        if phone_number != phone_number_original:
-            logger.info(f"Phone number normalized: {phone_number_original} → {phone_number}")
-        
-        # Validation
-        logger.info("Validating parameters...")
-        if not phone_number:
-            logger.error("[FASTAPI-SERVER] Validation error: Phone number is empty")
-            raise HTTPException(
-                status_code=400,
-                detail="Phone number (number) is required and must not be empty"
-            )
-        
-        if not message:
-            logger.error("[FASTAPI-SERVER] Validation error: Message is empty")
-            raise HTTPException(
-                status_code=400,
-                detail="Message (text) is required and must not be empty"
-            )
-        
-        logger.info("✓ Parameter validation successful")
-        
-        # Load router configuration
-        logger.info("Loading router configuration...")
-        config = load_config()
-        router_config = config.get("router", {})
-        
-        # Use router credentials from config or API parameters
-        router_url = router_config.get("url")
-        router_user = router_config.get("username")
-        router_password = router_config.get("password")
-        
-        # If no router credentials in config, use API credentials
-        # (not recommended, but for compatibility)
-        if not router_url or not router_user or not router_password:
-            logger.error("[FASTAPI-SERVER] Configuration error: Router credentials missing")
-            raise HTTPException(
-                status_code=500,
-                detail="Router configuration missing. Please configure config.yaml."
-            )
-        
-        logger.info(f"Router URL: {router_url}")
-        logger.info(f"Router User: {router_user}")
-        
-        # Initialize SMS class
-        logger.info("Initializing SMS class...")
-        sms = TRB245SMS(router_url, router_user, router_password)
-        
-        # Authenticate
-        logger.info("Authenticating with router...")
-        if not sms.authenticate():
-            logger.error("[ROUTER] Authentication failed")
+        # Validate API credentials
+        if not validate_api_credentials(username, password):
+            logger.error("[AUTH] API authentication failed")
             raise HTTPException(
                 status_code=401,
-                detail="Authentication with router failed"
+                detail="Invalid API credentials"
             )
-        logger.info("✓ Authentication with router successful")
         
-        # Find primary modem automatically
-        logger.info("Determining available modems...")
-        modems = sms.get_modems()
-        modem_id = "1-1.4"  # Fallback
-        if modems and modems.get("success") and "data" in modems:
-            logger.info(f"Available modems: {len(modems['data'])}")
-            for modem_info in modems["data"]:
-                if modem_info.get("primary"):
-                    modem_id = modem_info.get("id", "1-1.4")
-                    logger.info(f"✓ Primary modem found: {modem_id}")
-                    break
-            if modem_id == "1-1.4" and modems["data"]:
-                modem_id = modems["data"][0].get("id", "1-1.4")
-                logger.info(f"Using first available modem: {modem_id}")
-        else:
-            logger.warning(f"Could not retrieve modem list, using fallback: {modem_id}")
-        
-        # Send SMS (automatic splitting for > 160 characters)
-        logger.info("=" * 80)
-        logger.info(f"[ROUTER] Sending SMS to {phone_number} via modem {modem_id}")
-        logger.info(f"Message (first 200 characters): {message[:200]}")
-        logger.info(f"Message length: {len(message)} characters")
-        
-        # Check if message needs to be split
-        if len(message) > 160:
-            logger.info(f"ℹ Message is longer than 160 characters and will be automatically split")
-        
-        result = sms.send_sms(phone_number, message, modem_id)
-        
-        # Log complete router response
-        logger.info("=" * 80)
-        logger.info("[ROUTER] Response from router:")
-        logger.info(f"  Success: {result.get('success')}")
-        logger.info(f"  Complete response: {result}")
-        
-        if result.get("success"):
-            sms_used = result.get("data", {}).get("sms_used", 0)
-            parts = result.get("data", {}).get("parts", 1)
-            
-            if parts > 1:
-                logger.info(f"✓ SMS sent successfully! ({parts} parts, total {sms_used} SMS)")
-            else:
-                logger.info(f"✓ SMS sent successfully! (SMS used: {sms_used})")
-            logger.info("=" * 80)
-            
-            response_content = {
-                "success": True,
-                "message": "SMS sent successfully",
-                "sms_used": sms_used,
-                "phone_number": phone_number,
-                "message_length": len(message)
-            }
-            
-            # Add information about multi-part SMS
-            if parts > 1:
-                response_content["parts"] = parts
-                response_content["message"] = f"SMS sent successfully ({parts} parts)"
-            
-            return JSONResponse(
-                status_code=200,
-                content=response_content
-            )
-        else:
-            errors = result.get("errors", [])
-            error_msg = "; ".join([e.get("error", "Unknown error") for e in errors])
-            logger.error("=" * 80)
-            logger.error("[ROUTER] SMS sending failed!")
-            logger.error(f"  Error details: {error_msg}")
-            logger.error(f"  Complete error objects: {errors}")
-            logger.error("=" * 80)
-            raise HTTPException(
-                status_code=422,
-                detail=f"SMS sending failed (error from router): {error_msg}"
-            )
+        return await process_sms_request(number, text)
     
     except HTTPException as e:
         logger.error("=" * 80)
@@ -275,9 +333,79 @@ async def send_sms(
         )
 
 
+@app.post("/")
+async def send_sms_post(request: SMSRequest = Body(...)):
+    """
+    Sends an SMS via the router (POST method)
+    
+    Request body should contain:
+    - username: API username
+    - password: API password
+    - number: Phone number (may contain %SMSNUMBER)
+    - text: SMS text (may contain %SMSTEXT)
+    
+    Example:
+        POST / with JSON body:
+        {
+            "username": "apiuser",
+            "password": "apipass",
+            "number": "+491234567890",
+            "text": "Hello World"
+        }
+    """
+    logger.info("=" * 80)
+    logger.info("New SMS request received (POST)")
+    logger.info(f"Username: {request.username}")
+    logger.info(f"Number (raw): {request.number[:50]}... (length: {len(request.number)})")
+    logger.info(f"Text (raw): {request.text[:100]}... (length: {len(request.text)})")
+    
+    try:
+        # Validate API credentials
+        if not validate_api_credentials(request.username, request.password):
+            logger.error("[AUTH] API authentication failed")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid API credentials"
+            )
+        
+        return await process_sms_request(request.number, request.text)
+    
+    except HTTPException as e:
+        logger.error("=" * 80)
+        logger.error(f"[FASTAPI-SERVER] HTTPException: Status {e.status_code}")
+        logger.error(f"  Detail: {e.detail}")
+        logger.error("=" * 80)
+        raise
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error(f"[FASTAPI-SERVER] Unexpected error: {type(e).__name__}")
+        logger.error(f"  Error: {str(e)}")
+        import traceback
+        logger.error(f"  Traceback:\n{traceback.format_exc()}")
+        logger.error("=" * 80)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal error: {str(e)}"
+        )
+
+
+# Legacy endpoint - kept for backward compatibility but now requires authentication
+@app.get("/send")
+async def send_sms_legacy(
+    username: str = Query(..., description="API username"),
+    password: str = Query(..., description="API password"),
+    number: str = Query(..., description="Phone number (may contain %SMSNUMBER)"),
+    text: str = Query(..., description="SMS text (may contain %SMSTEXT)")
+):
+    """
+    Legacy endpoint - redirects to main endpoint
+    """
+    return await send_sms_get(username, password, number, text)
+
+
 @app.get("/health")
 async def health_check():
-    """Health-check endpoint"""
+    """Health-check endpoint (no authentication required)"""
     logger.debug("Health-check called")
     return {"status": "ok", "service": "SMS Gateway API"}
 
