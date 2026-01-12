@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SMS sending via Teltonika TRB245 Router
+SMS sending via Teltonika Router
 Uses the router's REST API to send SMS messages.
 """
 
@@ -178,11 +178,10 @@ def split_sms_message(message: str, max_length: int = 160, add_numbering: bool =
 
 def normalize_phone_number(phone_number: str) -> str:
     """
-    Normalizes a phone number for the TRB245 router.
+    Normalizes a phone number for the router.
     
     Converts:
     - +49... → 0049... (router has issues with +)
-    - 0151... → 0049151... (German numbers without country code)
     - +43... → 0043... (Austria)
     - +41... → 0041... (Switzerland)
     - +1... → 001... (USA/Canada)
@@ -192,7 +191,7 @@ def normalize_phone_number(phone_number: str) -> str:
         phone_number: Phone number in any format
     
     Returns:
-        Normalized phone number with 00 prefix
+        Normalized phone number (only + converted to 00)
     """
     if not phone_number:
         return phone_number
@@ -213,18 +212,11 @@ def normalize_phone_number(phone_number: str) -> str:
             # If no match, remove the +
             normalized = normalized[1:]
     
-    # Normalize German numbers without international prefix
-    # If number starts with 0 (but not 00), add 0049
-    if normalized.startswith("0") and not normalized.startswith("00"):
-        # Remove leading 0 and add 0049
-        # Works for all German numbers (mobile 01..., landline 030..., 040..., etc.)
-        normalized = "0049" + normalized[1:]
-    
     return normalized
 
 
 class TRB245SMS:
-    """Class for sending SMS via TRB245 router"""
+    """Class for sending SMS via Teltonika router"""
     
     def __init__(self, router_url: str, username: str, password: str):
         """
@@ -702,7 +694,7 @@ def main():
     
     # Create argument parser
     parser = argparse.ArgumentParser(
-        description="Send SMS via Teltonika TRB245 router",
+        description="Send SMS via Teltonika router",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Configuration:

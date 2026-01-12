@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FastAPI SMS Gateway for Teltonika TRB245 Router
+FastAPI SMS Gateway for Teltonika Router
 Accepts GET requests with URL parameters for sending SMS
 """
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="SMS Gateway API",
-    description="API for sending SMS via Teltonika TRB245 Router",
+    description="API for sending SMS via Teltonika Router",
     version="1.0.0"
 )
 
@@ -99,7 +99,7 @@ async def send_sms(
     text: str = Query(..., description="SMS text (may contain %SMSTEXT)")
 ):
     """
-    Sends an SMS via the TRB245 router
+    Sends an SMS via the router
     
     Parameters are automatically URL-decoded by FastAPI (UTF-8).
     
@@ -121,7 +121,7 @@ async def send_sms(
         logger.info(f"Number (decoded): {phone_number} (length: {len(phone_number)})")
         logger.info(f"Text (decoded): {message[:100]}... (length: {len(message)})")
         
-        # Normalize phone number (converts +49 to 0049, 0151 to 0049151, etc.)
+        # Normalize phone number (converts +49 to 0049, +XX to 00XX, etc.)
         phone_number_original = phone_number
         phone_number = normalize_phone_number(phone_number)
         if phone_number != phone_number_original:

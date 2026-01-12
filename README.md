@@ -1,13 +1,13 @@
 # SMS Gateway API
 
-A FastAPI-based web server for sending SMS messages via a Teltonika TRB245 router.
+A FastAPI-based web server for sending SMS messages via Teltonika routers.
 
 ## Features
 
 - REST API for sending SMS via HTTP GET requests
 - Automatic authentication with token caching
 - Automatic modem detection (uses primary modem)
-- Automatic phone number normalization (+49 → 0049, 0151 → 0049151)
+- Automatic phone number normalization (+49 → 0049, +XX → 00XX)
 - Automatic SMS splitting for messages > 160 characters
 - URL parameter decoding (UTF-8)
 - Health-check endpoint
@@ -15,7 +15,7 @@ A FastAPI-based web server for sending SMS messages via a Teltonika TRB245 route
 ## Requirements
 
 - Python 3.7 or higher
-- Teltonika TRB245 router with REST API enabled
+- Teltonika router with REST API enabled
 - Network access to the router
 
 ## Installation
@@ -74,8 +74,7 @@ Interactive API documentation:
 **Phone Number Normalization:**
 - All numbers are automatically normalized before sending
 - `+49...` → `0049...` (and other countries: `+XX` → `00XX`)
-- `0151...` → `0049151...` (German numbers without country code)
-- Numbers starting with `0` (but not `00`) are prefixed with `0049`
+- Numbers starting with `+` are converted to `00` prefix
 
 **Example:**
 ```bash
