@@ -1,0 +1,15 @@
+# Teltonika TRB245 SMS Configuration
+# Copy this file to config.yaml and adjust the values
+
+router:
+  url: "https://smsrouter.local"  # Router URL or IP address
+  username: "admin"                # Username
+  password: "YourPassword"        # Password
+
+# Standard modem (automatically detected if not specified)
+# modem: "1-1.4"
+
+# Server configuration
+server:
+  port: 8080  # Port on which the web server runs (default: 8000)
+  log_retention_days: 30  # Number of days logs are kept (default: 30)
