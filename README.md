@@ -4,13 +4,14 @@ A FastAPI-based web server for sending SMS messages via Teltonika routers.
 
 ## Features
 
-- REST API for sending SMS via HTTP GET requests
-- Automatic authentication with token caching
+- REST API for sending SMS via HTTP GET and POST requests
+- API authentication with username/password (configurable in config.yaml)
+- Automatic authentication with token caching for router
 - Automatic modem detection (uses primary modem)
 - Automatic phone number normalization (+49 → 0049, +XX → 00XX)
 - Automatic SMS splitting for messages > 160 characters
 - URL parameter decoding (UTF-8)
-- Health-check endpoint
+- Health-check endpoint (no authentication required)
 
 ## Requirements
 
@@ -196,6 +197,7 @@ python send_sms.py --list-modems
 
 ## Troubleshooting
 
-- **Authentication failed:** Check router credentials in `config.yaml`
+- **API authentication failed:** Check API credentials in `config.yaml` (api section) and ensure they match the username/password in your request
+- **Router authentication failed:** Check router credentials in `config.yaml` (router section)
 - **SMS sending failed:** Verify phone number format and modem status
 - **Modem not found:** Check available modems with `python send_sms.py --list-modems`
