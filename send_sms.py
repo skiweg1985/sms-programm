@@ -10,6 +10,7 @@ import sys
 import os
 import argparse
 import time
+import logging
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 import urllib3
@@ -23,6 +24,15 @@ except ImportError:
 
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Configure module logger. If the parent app already configured logging, this is ignored.
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+logger = logging.getLogger(__name__)
 
 
 def split_at_word_boundary(text: str, max_length: int) -> tuple[str, str]:
@@ -278,7 +288,7 @@ class TRB245SMS:
                 )
                 self.session.cookies.set_cookie(cookie)
                 remaining = int(expires_at - current_time)
-                print(f"✓ Using valid token from cache (valid for {remaining}s)")
+                logger.info("Using valid token from cache (valid for %ss)", remaining)
                 return True
             else:
                 # Token expired, delete cache
@@ -415,29 +425,29 @@ class TRB245SMS:
                 # Save token to cache
                 self.save_token_to_cache(self.token, expires_seconds)
                 
-                print(f"✓ Authentication successful (token valid for {expires_seconds}s)")
+                logger.info("Authentication successful (token valid for %ss)", expires_seconds)
                 return True
             else:
-                print(f"✗ Authentication failed: No token in response")
-                print(f"  Response: {data}")
+                logger.error("Authentication failed: No token in response")
+                logger.error("Response: %s", data)
                 return False
                 
         except requests.exceptions.SSLError as e:
-            print(f"✗ SSL error: {e}")
-            print(f"  Trying with SSL verification disabled...")
+            logger.error("SSL error: %s", e)
+            logger.info("Trying with SSL verification disabled...")
             # Already tried with verify=False, so it's a different problem
             return False
         except requests.exceptions.RequestException as e:
-            print(f"✗ Authentication error: {e}")
+            logger.error("Authentication error: %s", e)
             if hasattr(e, 'response') and e.response is not None:
-                print(f"  Response status: {e.response.status_code}")
+                logger.error("Response status: %s", e.response.status_code)
                 try:
-                    print(f"  Response: {e.response.json()}")
+                    logger.error("Response: %s", e.response.json())
                 except:
-                    print(f"  Response text: {e.response.text[:200]}")
+                    logger.error("Response text: %s", e.response.text[:200])
             return False
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"✗ Error: Response is not valid JSON: {e}")
+            logger.error("Response is not valid JSON: %s", e)
             return False
         
         return False
@@ -473,7 +483,7 @@ class TRB245SMS:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"✗ Error retrieving modems: {e}")
+            logger.error("Error retrieving modems: %s", e)
             return None
     
     def send_sms(
@@ -510,8 +520,16 @@ class TRB245SMS:
             # Split message with numbering (e.g. "1/3: ", "2/3: ", "3/3: ")
             message_parts = split_sms_message(message, max_sms_length, add_numbering=True)
             total_parts = len(message_parts)
-            print(f"ℹ Message is {len(message)} characters long and will be split into {total_parts} SMS")
-            print(f"  Each SMS contains numbering (e.g. '1/{total_parts}: ', '2/{total_parts}: ', etc.)")
+            logger.info(
+                "Message is %s characters long and will be split into %s SMS",
+                len(message),
+                total_parts
+            )
+            logger.info(
+                "Each SMS contains numbering (e.g. '1/%s: ', '2/%s: ', etc.)",
+                total_parts,
+                total_parts
+            )
             
             # Send all parts
             all_results = []
@@ -519,7 +537,13 @@ class TRB245SMS:
             all_successful = True
             
             for i, part in enumerate(message_parts, 1):
-                print(f"  Sending part {i}/{total_parts} ({len(part)} characters, starts with '{part[:10]}...')")
+                logger.info(
+                    "Sending part %s/%s (%s characters, starts with '%s...')",
+                    i,
+                    total_parts,
+                    len(part),
+                    part[:10]
+                )
                 result = self._send_single_sms(phone_number, part, modem)
                 all_results.append(result)
                 
@@ -530,7 +554,7 @@ class TRB245SMS:
                     all_successful = False
                     errors = result.get("errors", [])
                     error_msg = "; ".join([e.get("error", "Unknown error") for e in errors])
-                    print(f"  ✗ Part {i}/{total_parts} failed: {error_msg}")
+                    logger.error("Part %s/%s failed: %s", i, total_parts, error_msg)
                     # Abort on error
                     return {
                         "success": False,
@@ -539,7 +563,11 @@ class TRB245SMS:
                         "total_parts": total_parts
                     }
             
-            print(f"✓ All {total_parts} SMS parts sent successfully! (Total: {total_sms_used} SMS)")
+            logger.info(
+                "All %s SMS parts sent successfully! (Total: %s SMS)",
+                total_parts,
+                total_sms_used
+            )
             return {
                 "success": True,
                 "data": {
@@ -608,39 +636,46 @@ class TRB245SMS:
                 sms_used = result.get("data", {}).get("sms_used", "unknown")
                 # Only output for single SMS (multi-part is output above)
                 if len(message) <= 160:
-                    print(f"✓ SMS sent successfully! (SMS used: {sms_used})")
+                    logger.info("SMS sent successfully! (SMS used: %s)", sms_used)
             else:
                 errors = result.get("errors", [])
                 error_msg = "; ".join([e.get("error", "Unknown error") for e in errors])
-                print(f"✗ SMS sending failed: {error_msg}")
+                logger.error("SMS sending failed: %s", error_msg)
                 
                 # If modem error, show available modems
                 modem_error = any(e.get("source") == "modem" for e in errors)
                 if modem_error:
-                    print(f"\n  Attempting to retrieve available modems...")
+                    logger.info("Attempting to retrieve available modems...")
                     modems = self.get_modems()
                     if modems and modems.get("success") and "data" in modems:
-                        print(f"  Available modems:")
+                        logger.info("Available modems:")
                         for modem in modems["data"]:
                             modem_id = modem.get("id", "unknown")
                             modem_name = modem.get("name", "Unnamed")
                             primary = " (Primary)" if modem.get("primary") else ""
                             state = modem.get("state", "unknown")
                             operator = modem.get("operator", "")
-                            print(f"    - ID: {modem_id} | Name: {modem_name}{primary} | Status: {state} | Operator: {operator}")
+                            logger.info(
+                                "- ID: %s | Name: %s%s | Status: %s | Operator: %s",
+                                modem_id,
+                                modem_name,
+                                primary,
+                                state,
+                                operator
+                            )
                     else:
-                        print(f"  Could not retrieve modem list. Please check router configuration.")
+                        logger.warning("Could not retrieve modem list. Please check router configuration.")
             
             return result
             
         except requests.exceptions.RequestException as e:
-            print(f"✗ Error sending SMS: {e}")
+            logger.error("Error sending SMS: %s", e)
             if hasattr(e, 'response') and e.response is not None:
                 try:
                     error_data = e.response.json()
-                    print(f"  Response: {error_data}")
+                    logger.error("Response: %s", error_data)
                 except:
-                    print(f"  Response text: {e.response.text[:200]}")
+                    logger.error("Response text: %s", e.response.text[:200])
             return {"success": False, "error": str(e)}
 
 
