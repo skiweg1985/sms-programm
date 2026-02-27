@@ -209,7 +209,7 @@ User=$SERVICE_USER
 Group=$SERVICE_USER
 WorkingDirectory=$PROJECT_DIR
 Environment="PATH=$PROJECT_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=$PROJECT_DIR/venv/bin/uvicorn sms_api:app --host 0.0.0.0 --port $PORT
+ExecStart=$PROJECT_DIR/venv/bin/uvicorn sms_api:app --host 0.0.0.0 --port $PORT --log-config $PROJECT_DIR/uvicorn_logging.yaml
 Restart=always
 RestartSec=10
 StandardOutput=append:$PROJECT_DIR/logs/sms-api.log

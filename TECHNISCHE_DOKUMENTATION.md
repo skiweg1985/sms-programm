@@ -182,6 +182,7 @@ Service-Steuerung via `service.sh`:
 - Application-Log (stdout + stderr): `logs/sms-api.log`
 - Cleanup-Logs: `logs/cleanup.log`, `logs/cleanup-error.log`
 - Legacy-Datei: `logs/sms-api-error.log` kann aus aelteren Installationen vorhanden sein, wird aber nicht mehr aktiv beschrieben.
+- Uvicorn-Logs (Startup/Access) werden ueber `uvicorn_logging.yaml` im gleichen Zeitstempel-Format ausgegeben.
 
 Log-Retention:
 - `cleanup_logs.sh` loescht `.log` Dateien aelter als `server.log_retention_days` (Default: 30).

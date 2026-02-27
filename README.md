@@ -183,6 +183,7 @@ sudo ./install_service.sh
 - Application log (stdout + stderr): `logs/sms-api.log`
 - Cleanup logs: `logs/cleanup.log`, `logs/cleanup-error.log`
 - Legacy file `logs/sms-api-error.log` may still exist from older installations but is no longer actively used
+- Uvicorn startup/access logs use the same timestamp format via `uvicorn_logging.yaml`
 
 **Uninstall:**
 ```bash
