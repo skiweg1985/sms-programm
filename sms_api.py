@@ -283,10 +283,10 @@ async def process_sms_request(phone_number: str, message: str):
 
 @app.get("/")
 async def send_sms_get(
-    username: Optional[str] = Query(None, description="API username"),
-    password: Optional[str] = Query(None, description="API password"),
-    number: Optional[str] = Query(None, description="Phone number"),
-    text: Optional[str] = Query(None, description="SMS text")
+    username: str = Query(..., description="API username"),
+    password: str = Query(..., description="API password"),
+    number: str = Query(..., description="Phone number"),
+    text: str = Query(..., description="SMS text")
 ):
     """
     Sends an SMS via the router (GET method)
@@ -296,36 +296,6 @@ async def send_sms_get(
     Example:
         GET /?username=apiuser&password=apipass&number=%2B491234567890&text=Hello%20World
     """
-    def is_missing(value: Optional[str]) -> bool:
-        return value is None or not value.strip()
-
-    # Friendly error for direct browser call without query parameters.
-    if all(is_missing(value) for value in (username, password, number, text)):
-        logger.warning("[FASTAPI-SERVER] GET / called without query parameters")
-        return JSONResponse(
-            status_code=400,
-            content={
-                "success": False,
-                "error": "Missing required query parameters",
-                "message": "Use /?username=...&password=...&number=...&text=..."
-            }
-        )
-
-    missing_fields = [
-        field for field, value in {
-            "username": username,
-            "password": password,
-            "number": number,
-            "text": text
-        }.items()
-        if is_missing(value)
-    ]
-    if missing_fields:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing required query parameter(s): {', '.join(missing_fields)}"
-        )
-
     logger.info("=" * 80)
     logger.info("New SMS request received (GET)")
     logger.info(f"Username: {username}")

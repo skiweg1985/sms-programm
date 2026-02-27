@@ -105,7 +105,6 @@ Credentials must be provided with each request either as:
 ```bash
 curl "http://localhost:8000/?username=apiuser&password=apipassword&number=%2B491234567890&text=Hello%20World"
 ```
-Calling `GET /` without these query parameters returns a compact JSON error with HTTP `400`.
 
 **POST Example:**
 ```bash
