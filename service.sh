@@ -127,20 +127,19 @@ case "${1:-help}" in
         echo ""
         if [ -d "$LOG_DIR" ]; then
             if [ -f "$LOG_DIR/sms-api.log" ]; then
-                echo -e "${GREEN}Standard output log:${NC}"
+                echo -e "${GREEN}Application log (stdout + stderr):${NC}"
                 echo "  $LOG_DIR/sms-api.log"
                 echo "  Size: $(du -h "$LOG_DIR/sms-api.log" | cut -f1)"
                 echo ""
             fi
             if [ -f "$LOG_DIR/sms-api-error.log" ]; then
-                echo -e "${RED}Error log:${NC}"
+                echo -e "${YELLOW}Legacy error log (no longer actively used):${NC}"
                 echo "  $LOG_DIR/sms-api-error.log"
                 echo "  Size: $(du -h "$LOG_DIR/sms-api-error.log" | cut -f1)"
                 echo ""
             fi
             echo "View logs:"
             echo "  tail -f $LOG_DIR/sms-api.log"
-            echo "  tail -f $LOG_DIR/sms-api-error.log"
         else
             echo -e "${YELLOW}Log directory not found: $LOG_DIR${NC}"
         fi

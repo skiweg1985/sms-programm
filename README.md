@@ -176,7 +176,13 @@ sudo ./install_service.sh
 ./service.sh restart    # Restart service
 ./service.sh status     # Show status
 ./service.sh logs       # Show logs
+./service.sh logfile    # Show log files and paths
 ```
+
+**Logging:**
+- Application log (stdout + stderr): `logs/sms-api.log`
+- Cleanup logs: `logs/cleanup.log`, `logs/cleanup-error.log`
+- Legacy file `logs/sms-api-error.log` may still exist from older installations but is no longer actively used
 
 **Uninstall:**
 ```bash

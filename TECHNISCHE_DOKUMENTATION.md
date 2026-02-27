@@ -179,9 +179,9 @@ Service-Steuerung via `service.sh`:
 ```
 
 ## Logging
-- Standard-Output: `logs/sms-api.log`
-- Fehler-Output: `logs/sms-api-error.log`
+- Application-Log (stdout + stderr): `logs/sms-api.log`
 - Cleanup-Logs: `logs/cleanup.log`, `logs/cleanup-error.log`
+- Legacy-Datei: `logs/sms-api-error.log` kann aus aelteren Installationen vorhanden sein, wird aber nicht mehr aktiv beschrieben.
 
 Log-Retention:
 - `cleanup_logs.sh` loescht `.log` Dateien aelter als `server.log_retention_days` (Default: 30).
@@ -210,7 +210,7 @@ Konfigurationsprioritaet:
 - **401 Router Auth**: `router.*` in `config.yaml` pruefen.
 - **SMS sending failed**: Router-Status, Modem-Status, Nummernformat.
 - **Modem not found**: `python send_sms.py --list-modems` ausfuehren.
-- **Service startet nicht**: `sudo systemctl status sms-api` und `logs/sms-api-error.log` pruefen.
+- **Service startet nicht**: `sudo systemctl status sms-api` und `logs/sms-api.log` pruefen.
 
 ## Dateien und Zustaendigkeiten
 - `sms_api.py`: HTTP API, Auth, Request-Flow, Logging.

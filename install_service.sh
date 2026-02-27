@@ -213,7 +213,7 @@ ExecStart=$PROJECT_DIR/venv/bin/uvicorn sms_api:app --host 0.0.0.0 --port $PORT
 Restart=always
 RestartSec=10
 StandardOutput=append:$PROJECT_DIR/logs/sms-api.log
-StandardError=append:$PROJECT_DIR/logs/sms-api-error.log
+StandardError=append:$PROJECT_DIR/logs/sms-api.log
 
 # Security
 NoNewPrivileges=true

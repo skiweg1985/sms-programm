@@ -25,14 +25,16 @@ except ImportError:
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Configure module logger. If the parent app already configured logging, this is ignored.
-if not logging.getLogger().handlers:
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
 logger = logging.getLogger(__name__)
+
+
+def configure_cli_logging():
+    """Configure root logging for CLI usage when no handlers exist yet."""
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
 
 
 def split_at_word_boundary(text: str, max_length: int) -> tuple[str, str]:
@@ -708,6 +710,8 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
 
 def main():
     """Main function for command-line usage"""
+    configure_cli_logging()
+
     # Load configuration from config.yaml
     config = load_config()
     router_config = config.get("router", {})
