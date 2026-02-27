@@ -119,7 +119,14 @@ case "${1:-help}" in
         check_service_exists
         echo -e "${BLUE}Showing service logs (live, Ctrl+C to exit)...${NC}"
         echo ""
-        journalctl -u "${SERVICE_NAME}.service" -f
+        if [ -f "$LOG_DIR/sms-api.log" ]; then
+            tail -f "$LOG_DIR/sms-api.log"
+        else
+            echo -e "${YELLOW}Log file not found yet: $LOG_DIR/sms-api.log${NC}"
+            echo "Falling back to journalctl until the file is created..."
+            echo ""
+            journalctl -u "${SERVICE_NAME}.service" -f
+        fi
         ;;
     
     logfile)
