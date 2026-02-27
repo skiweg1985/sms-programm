@@ -285,8 +285,8 @@ async def process_sms_request(phone_number: str, message: str):
 async def send_sms_get(
     username: str = Query(..., description="API username"),
     password: str = Query(..., description="API password"),
-    number: str = Query(..., description="Phone number (may contain %SMSNUMBER)"),
-    text: str = Query(..., description="SMS text (may contain %SMSTEXT)")
+    number: str = Query(..., description="Phone number"),
+    text: str = Query(..., description="SMS text")
 ):
     """
     Sends an SMS via the router (GET method)
@@ -295,7 +295,6 @@ async def send_sms_get(
     
     Example:
         GET /?username=apiuser&password=apipass&number=%2B491234567890&text=Hello%20World
-        GET /?username=apiuser&password=apipass&number=%SMSNUMBER&text=%SMSTEXT
     """
     logger.info("=" * 80)
     logger.info("New SMS request received (GET)")
@@ -341,8 +340,8 @@ async def send_sms_post(request: SMSRequest = Body(...)):
     Request body should contain:
     - username: API username
     - password: API password
-    - number: Phone number (may contain %SMSNUMBER)
-    - text: SMS text (may contain %SMSTEXT)
+    - number: Phone number
+    - text: SMS text
     
     Example:
         POST / with JSON body:
@@ -394,8 +393,8 @@ async def send_sms_post(request: SMSRequest = Body(...)):
 async def send_sms_legacy(
     username: str = Query(..., description="API username"),
     password: str = Query(..., description="API password"),
-    number: str = Query(..., description="Phone number (may contain %SMSNUMBER)"),
-    text: str = Query(..., description="SMS text (may contain %SMSTEXT)")
+    number: str = Query(..., description="Phone number"),
+    text: str = Query(..., description="SMS text")
 ):
     """
     Legacy endpoint - redirects to main endpoint
